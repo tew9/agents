@@ -1,0 +1,22 @@
+coder_task:
+  description: >
+    You are given the following assignment: {assignment}
+
+    Steps to follow:
+    1. Analyze the assignment and plan what the output would look like, then write the code, and correct the code to solve it.
+    2. Execute the code using the code execution tool and capture the output.
+    3. If execution fails, fix the code and re-execute until it succeeds.
+    4. Produce the final output file containing all three sections as described below.
+  expected_output: >
+    A plain text file with exactly three sections in this order:
+
+    # Assignment
+    A one-line summary of the assignment: {assignment}
+
+    # Code
+    The complete, final working code (no markdown fences, just the raw code).
+
+    # Output
+    The exact output produced by executing the code.
+  agent: coder
+  output_file: output/code_output_execution.txt
