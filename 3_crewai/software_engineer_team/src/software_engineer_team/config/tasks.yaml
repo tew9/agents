@@ -1,0 +1,72 @@
+design_task:
+  description: >
+    Read the user requirements: {requirements}. Produce a complete SystemDesign: module decomposition, data model (entities, fields, relations), API contract (method, path, request/response Pydantic schemas, authz scope per endpoint), non-functional requirements (perf, security, scalability targets), UI spec (pages, components, primary flows), and known risks. Default stack: Python 3.11+, FastAPI, SQLAlchemy 2.x + SQLite, Gradio. Justify any deviation. The design must be implementable by the four specialist engineers without further clarification.
+  expected_output: >
+    A SystemDesign structured object with module decomposition, data model, API contract, NFRs, UI spec, and risks.
+  agent: architect_lead
+  async_execution: false
+  human_input: false
+  output_file: output/00_system_design.json
+
+backend_task:
+  description: >
+    Implement the backend as real Python source files under output/backend/, layered as api -> services -> repositories -> models. Use SQLAlchemy 2.x with SQLite. The service layer is the public surface consumed by the Gradio frontend in-process; it must be HTTP-agnostic with no FastAPI imports outside backend/api/. Additionally produce a thin FastAPI adapter under backend/api/ exposing create_app() and routers that call the same services, so the library can be promoted to an HTTP service later with zero changes to business logic. Use Pydantic for all schemas. No string-interpolated SQL. Secrets only via environment.
+  expected_output: >
+    A fully working Python package at output/backend/ with __init__.py and subdirectories services/, repositories/, models/, schemas/, and api/. Every service function must be importable and all files must be free of syntax errors.
+  agent: backend_engineer
+  async_execution: true
+  context: [design_task]
+  human_input: false
+
+design_test_task:
+  description: >
+    Using SystemDesign (requirements, API contract, NFRs), produce a complete TestPlan. For every endpoint and every UI flow: at least one happy-path, one negative, and one edge case. Each test case has a stable id (TC-<area>-<n>), preconditions, steps, and expected result. Build the requirement-to-test coverage matrix. Tag P0 cases that must be in the regression set.
+  expected_output: >
+    A TestPlan structured object with test_cases (each with id, area, priority, steps, expected result) and a coverage matrix.
+  agent: qa_engineer
+  async_execution: true
+  context: [design_task]
+  human_input: false
+
+test_design_frontend:
+  description: >
+    From SystemDesign.ui_spec, design the Gradio frontend: page list, component hierarchy per page, interaction map (what triggers what), style tokens (palette, typography scale, spacing). Aim for a modern, opinionated look and never the default Gradio theme. Do not write code yet.
+  expected_output: >
+    A FrontendSpec structured object with pages, components, style_tokens, and interaction_map.
+  agent: frontend_engineer
+  async_execution: true
+  context: [design_task]
+  human_input: false
+
+unit_tests_task:
+  description: >
+    Write runnable pytest modules under output/tests/ targeting the backend at output/backend/. Use SQLite in-memory and FastAPI TestClient with dependency overrides; no network and no real DB. Mirror the backend module layout under output/tests/. Every test docstring cites its TC id. P0 cases go under output/tests/regression/. Use CodeInterpreterTool to run pytest --collect-only and fix any collection errors before finishing.
+  expected_output: >
+    Pytest files under output/tests/ that are fully collectable via pytest --collect-only with zero errors. output/tests/regression/ contains all P0 cases.
+  agent: unit_test_engineer
+  async_execution: false
+  context: [backend_task, design_test_task]
+  human_input: false
+
+frontend_task:
+  description: >
+    Build the Gradio Blocks app per FrontendSpec, wired to the backend at output/backend/: import services directly and call them in-process (no HTTP). Every Gradio handler maps 1:1 to one service call so promoting to HTTP later is a flag flip. Apply style tokens via a Gradio theme plus minimal custom CSS. Every interactive element must surface backend errors gracefully. Use CodeInterpreterTool to import the app and fix any errors before finishing.
+  expected_output: >
+    A runnable Gradio entrypoint at output/app.py. Running `python output/app.py` must launch the Gradio UI without errors.
+  agent: frontend_engineer
+  async_execution: false
+  context: [design_task, backend_task, test_design_frontend]
+  human_input: false
+  output_file: output/app.py
+
+architect_review:
+  description: >
+    Produce the structured ReviewReport summarizing the run. By the time this task executes, every upstream task has already passed its own guardrail, so this task is a summary and not a gate. Fill contract_diff, coverage_gaps, regression_gaps, security_failures, and wired_endpoint_gaps for the record. Set status to PASS unless a PASS_WITH_NOTES condition applies. Fill summary_markdown with a concise human review of what was built, test coverage, manual checks, and next steps.
+  expected_output: >
+    A ReviewReport structured object with status PASS | PASS_WITH_NOTES | BLOCK and a summary_markdown field with a human-readable review.
+  agent: architect_lead
+  async_execution: false
+  context: [design_task, backend_task, design_test_task, unit_tests_task, frontend_task]
+  human_input: false
+  output_file: output/REVIEW.md
+
